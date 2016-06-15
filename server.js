@@ -1,159 +1,144 @@
-#!/bin/env node
-//  OpenShift sample Node application
+//import core modules
 var express = require('express');
-var fs      = require('fs');
+var app = express();
+var bodyParser = require('body-parser');
+var mongoose = require('mongoose');
 
+var dbConnection = process.env.OPENSHIFT_MONGODB_DB_PASSWORD ?
+	process.env.OPENSHIFT_MONGODB_DB_USERNAME + ":" +
+	process.env.OPENSHIFT_MONGODB_DB_PASSWORD + "@" +
+	process.env.OPENSHIFT_MONGODB_DB_HOST + ":" +
+	process.env.OPENSHIFT_MONGODB_DB_PORT + "/" +
+	process.env.OPENSHIFT_APP_NAME : "mongodb://localhost/linkshortener";
+mongoose.connect(dbConnection);
 
-/**
- *  Define the sample application.
- */
-var SampleApp = function() {
+var domain = process.env.OPENSHIFT_APP_NAME ?
+	'http://linkshortener-xianggao.rhcloud.com/' : 'http://localhost:3000/';
+var ip = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1';
+var port = process.env.OPENSHIFT_NODEJS_PORT || 3000;
 
-    //  Scope.
-    var self = this;
-
-
-    /*  ================================================================  */
-    /*  Helper functions.                                                 */
-    /*  ================================================================  */
-
-    /**
-     *  Set up server IP address and port # using env variables/defaults.
-     */
-    self.setupVariables = function() {
-        //  Set the environment variables we need.
-        self.ipaddress = process.env.OPENSHIFT_NODEJS_IP;
-        self.port      = process.env.OPENSHIFT_NODEJS_PORT || 8080;
-
-        if (typeof self.ipaddress === "undefined") {
-            //  Log errors on OpenShift but continue w/ 127.0.0.1 - this
-            //  allows us to run/test the app locally.
-            console.warn('No OPENSHIFT_NODEJS_IP var, using 127.0.0.1');
-            self.ipaddress = "127.0.0.1";
-        };
-    };
-
-
-    /**
-     *  Populate the cache.
-     */
-    self.populateCache = function() {
-        if (typeof self.zcache === "undefined") {
-            self.zcache = { 'index.html': '' };
-        }
-
-        //  Local cache for static content.
-        self.zcache['index.html'] = fs.readFileSync('./index.html');
-    };
-
-
-    /**
-     *  Retrieve entry (content) from cache.
-     *  @param {string} key  Key identifying content to retrieve from cache.
-     */
-    self.cache_get = function(key) { return self.zcache[key]; };
-
-
-    /**
-     *  terminator === the termination handler
-     *  Terminate server on receipt of the specified signal.
-     *  @param {string} sig  Signal to terminate on.
-     */
-    self.terminator = function(sig){
-        if (typeof sig === "string") {
-           console.log('%s: Received %s - terminating sample app ...',
-                       Date(Date.now()), sig);
-           process.exit(1);
-        }
-        console.log('%s: Node server stopped.', Date(Date.now()) );
-    };
-
-
-    /**
-     *  Setup termination handlers (for exit and a list of signals).
-     */
-    self.setupTerminationHandlers = function(){
-        //  Process on exit and signals.
-        process.on('exit', function() { self.terminator(); });
-
-        // Removed 'SIGPIPE' from the list - bugz 852598.
-        ['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT',
-         'SIGBUS', 'SIGFPE', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGTERM'
-        ].forEach(function(element, index, array) {
-            process.on(element, function() { self.terminator(element); });
-        });
-    };
-
-
-    /*  ================================================================  */
-    /*  App server functions (main app logic here).                       */
-    /*  ================================================================  */
-
-    /**
-     *  Create the routing table entries + handlers for the application.
-     */
-    self.createRoutes = function() {
-        self.routes = { };
-
-        self.routes['/asciimo'] = function(req, res) {
-            var link = "http://i.imgur.com/kmbjB.png";
-            res.send("<html><body><img src='" + link + "'></body></html>");
-        };
-
-        self.routes['/'] = function(req, res) {
-            res.setHeader('Content-Type', 'text/html');
-            res.send(self.cache_get('index.html') );
-        };
-    };
-
-
-    /**
-     *  Initialize the server (express) and create the routes and register
-     *  the handlers.
-     */
-    self.initializeServer = function() {
-        self.createRoutes();
-        self.app = express.createServer();
-
-        //  Add handlers for the app (from the routes).
-        for (var r in self.routes) {
-            self.app.get(r, self.routes[r]);
-        }
-    };
-
-
-    /**
-     *  Initializes the sample application.
-     */
-    self.initialize = function() {
-        self.setupVariables();
-        self.populateCache();
-        self.setupTerminationHandlers();
-
-        // Create the express server and routes.
-        self.initializeServer();
-    };
-
-
-    /**
-     *  Start the server (starts up the sample application).
-     */
-    self.start = function() {
-        //  Start the app on the specific interface (and port).
-        self.app.listen(self.port, self.ipaddress, function() {
-            console.log('%s: Node server started on %s:%d ...',
-                        Date(Date.now() ), self.ipaddress, self.port);
-        });
-    };
-
-};   /*  Sample Application.  */
+app.use(bodyParser.json());
+app.use(express.static(__dirname + '/views'));
 
 
 
-/**
- *  main():  Main code.
- */
-var zapp = new SampleApp();
-zapp.initialize();
-zapp.start();
+//database schemas
+var LinkPairSchema = mongoose.Schema({
+	originalLink: String,
+	shortenedLink: String
+}, {collection: 'linkpair'});
 
+var CounterSchema = mongoose.Schema({
+	_id: String,
+	counter: Number
+}, {collection: 'counter'});
+
+var LinkPairModel = mongoose.model('LinkPairModel', LinkPairSchema);
+var CounterModel = mongoose.model('CounterModel', CounterSchema);
+
+
+
+//restful apis
+app.post('/originalLink', getShortenedLink);
+app.get('/:shortenedLink', rediToOriginLink);
+
+
+function getShortenedLink(req, res) {
+	
+	var originalLink = req.body.originalLink;
+
+	LinkPairModel.findOne({originalLink: originalLink}, function(err, doc) {
+
+		if(err) throw err;
+
+		//original link has been stored in db, return shortened link
+		if(doc) {
+			var newLink = domain + doc.shortenedLink;
+			res.json(newLink);
+
+		}
+		//original link does not exist in db, generate shortened link
+		else {
+			var newlinkPair = {
+				originalLink: req.body.originalLink,
+				shortenedLink: '00000'
+			};
+
+			CounterModel.findOneAndUpdate({_id: 'counterId'},
+				{$inc: {counter: 1}}, {new: true}, function (err, doc) {
+
+				if(err) throw err;
+
+				//get next counter sequence
+				//counter exists, generate shortened link path
+				if(doc) {
+					newlinkPair.shortenedLink = createShortenedLink(doc.counter);
+
+				}
+				//counter does not exist, initialize counter
+				else {
+					var InitCounter = {
+						_id: 'counterId',
+						counter: 0
+					};
+					CounterModel.create(InitCounter, function (err) {
+						if(err) throw err;
+					});
+
+				}
+
+				//save new link pair into db.linkpair
+				LinkPairModel.create(newlinkPair, function (err, doc) {
+
+					if(err) throw err;
+
+					if(doc) {
+						var newLink = domain + doc.shortenedLink;
+						res.json(newLink);
+					}
+				});
+
+			});
+		}
+	});	
+}
+
+
+function rediToOriginLink(req, res) {
+
+	LinkPairModel.findOne({shortenedLink: req.params.shortenedLink},
+		function(err, doc) {
+
+			if(err) throw err;
+
+            //shortened link: in db, redirect; not in db, 404
+			if(doc) {
+				return res.redirect(301, doc.originalLink);
+			}
+            else {
+				res.status(404).send('404: Page not Found');
+			}
+		});
+}
+
+
+function createShortenedLink(counter) {
+
+	var alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	var path = "00000";
+	var index = 4;
+
+	while(counter != 0) {
+		path = path.substr(0, index) + alphabet.charAt(counter % 62)
+			+ path.substr(index + 1);
+		counter = Math.floor(counter / 62);
+		index--;
+	}
+
+	return path;
+}
+
+
+app.listen(port, ip, function() {
+	console.log('server is running..');
+});

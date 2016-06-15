@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="cn" ng-app="myApp">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>短链接生成器</title>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+    <link href="" rel="shortcut icon">
+
+</head>
+<body ng-controller="myCtrl">
+
+<div class="container-fluid">
+    <br/>
+    <br/>
+    <br/>
+    <br/>
+
+    <div class="row">
+        <div class="col-sm-offset-2 col-sm-8">
+            <h3 class="text-center">短网址生成器</h3>
+            <br/>
+            <br/>
+
+            <form name="linkForm" novalidate>
+                <div class="row">
+                    <div class="col-xs-9">
+                        <label>请输入您的网址</label>
+                        <input ng-model="originalLink" name="link" type="url" class="form-control" required>
+                    </div>
+                    <div class="col-xs-3">
+                        <label>&nbsp;</label>
+                        <button ng-click="getShortenedLink(originalLink)" class="form-control btn btn-primary">生成</button>
+                    </div>
+                </div>
+
+                <div ng-if="showError">
+                    <span ng-bind="error" class="text-danger"></span>
+                </div>
+
+                <br/>
+                <div>
+                    <label>生成的短网址</label><br/>
+                    <a ng-bind="shortenedLink" href="{{shortenedLink}}"></a>&nbsp;
+                </div>
+            </form>
+
+            <br/>
+            <br/>
+
+            <div class="alert alert-info">
+                <h4>操作提示</h4>
+                <ol>
+                    <li>在输入框中输入您要转换的网址</li>
+                    <li>输入完成后, 点击生成按钮</li>
+                    <li>生成的短网址将显示在屏幕上</li>
+                    <li>点击生成的短地址将会重新定向到原地址</li>
+                </ol>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
+<script src="app.js"></script>
+<script src="linkService.js"></script>
+</body>
+</html>
