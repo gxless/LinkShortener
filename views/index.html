@@ -42,10 +42,18 @@
                 </div>
 
                 <br/>
-                <div>
-                    <label>生成的短网址</label><br/>
-                    <a ng-bind="shortenedLink" href="{{shortenedLink}}"></a>&nbsp;
+                <div class="row">
+                    <div class="col-xs-9">
+                        <label>生成的短网址</label><br/>
+                        <a ng-bind="shortenedLink" href="{{shortenedLink}}"></a>&nbsp;
+                    </div>
+                    <div class="col-xs-3 text-center">
+                        <label>完成状态</label><br/>
+                        <span ng-show="requested && !complete" class="glyphicon glyphicon-ice-lolly-tasted text-danger"></span>
+                        <span ng-show="requested && complete" class="glyphicon glyphicon-ice-lolly text-success"></span>
+                    </div>
                 </div>
+
             </form>
 
             <br/>
